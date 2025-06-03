@@ -1578,7 +1578,910 @@ docs/
 README.md
 EOF
 ```
+## Step 4.2: Create Azure Deployment Scripts
 
-### 4.2 Create Azure Deployment Scripts
+```bash
+# Create deployment/azure/deploy.sh
+mkdir -p deployment/azure
+cat > deployment/azure/deploy.sh << 'EOF'
+#!/bin/bash
 
+# ESG Platform Azure Deployment Script
+set -e
+
+# Configuration
+RESOURCE_GROUP="rg-esg-poc"
+LOCATION="eastus"
+APP_SERVICE_PLAN="asp-esg-platform"
+WEB_APP_NAME="esg-analysis-webapp-$(date +%s)"
+CONTAINER_REGISTRY="cresgstorage$(date +%s)"
+IMAGE_NAME="esg-platform"
+
+echo "Starting ESG Platform deployment to Azure..."
+
+# Login to Azure (if not already logged in)
+az account show > /dev/null 2>&1 || az login
+
+# Create Container Registry
+echo "Creating Azure Container Registry..."
+az acr create \
+    --resource-group $RESOURCE_GROUP \
+    --name $CONTAINER_REGISTRY \
+    --sku Basic \
+    --admin-enabled true
+
+# Get ACR login server
+ACR_LOGIN_SERVER=$(az acr show --name $CONTAINER_REGISTRY --resource-group $RESOURCE_GROUP --query "loginServer" --output tsv)
+
+# Build and push Docker image
+echo "Building and pushing Docker image..."
+az acr build \
+    --registry $CONTAINER_REGISTRY \
+    --image $IMAGE_NAME:latest \
+    --file Dockerfile \
+    .
+
+# Create App Service Plan
+echo "Creating App Service Plan..."
+az appservice plan create \
+    --name $APP_SERVICE_PLAN \
+    --resource-group $RESOURCE_GROUP \
+    --is-linux \
+    --sku B2
+
+# Create Web App
+echo "Creating Web App..."
+az webapp create \
+    --resource-group $RESOURCE_GROUP \
+    --plan $APP_SERVICE_PLAN \
+    --name $WEB_APP_NAME \
+    --deployment-container-image-name "$ACR_LOGIN_SERVER/$IMAGE_NAME:latest"
+
+# Configure Web App settings
+echo "Configuring Web App settings..."
+az webapp config appsettings set \
+    --resource-group $RESOURCE_GROUP \
+    --name $WEB_APP_NAME \
+    --settings \
+        "AZURE_STORAGE_CONNECTION_STRING=$AZURE_STORAGE_CONNECTION_STRING" \
+        "AZURE_DOC_INTELLIGENCE_ENDPOINT=$AZURE_DOC_INTELLIGENCE_ENDPOINT" \
+        "AZURE_DOC_INTELLIGENCE_KEY=$AZURE_DOC_INTELLIGENCE_KEY" \
+        "AI_FOUNDRY_ENDPOINT=$AI_FOUNDRY_ENDPOINT" \
+        "AI_FOUNDRY_KEY=$AI_FOUNDRY_KEY" \
+        "FLASK_ENV=production" \
+        "WEBSITES_PORT=5000"
+
+# Configure container registry credentials
+ACR_USERNAME=$(az acr credential show --name $CONTAINER_REGISTRY --query username --output tsv)
+ACR_PASSWORD=$(az acr credential show --name $CONTAINER_REGISTRY --query passwords[0].value --output tsv)
+
+az webapp config container set \
+    --name $WEB_APP_NAME \
+    --resource-group $RESOURCE_GROUP \
+    --docker-custom-image-name "$ACR_LOGIN_SERVER/$IMAGE_NAME:latest" \
+    --docker-registry-server-url "https://$ACR_LOGIN_SERVER" \
+    --docker-registry-server-user $ACR_USERNAME \
+    --docker-registry-server-password $ACR_PASSWORD
+
+echo "Deployment completed successfully!"
+echo "Web App URL: https://$WEB_APP_NAME.azurewebsites.net"
+echo "Container Registry: $ACR_LOGIN_SERVER"
+EOF
+
+chmod +x deployment/azure/deploy.sh
 ```
+
+### 4.3 Create Azure Resource Manager Template
+
+```bash
+# Create deployment/azure/template.json
+cat > deployment/azure/template.json << 'EOF'
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "location": {
+            "type": "string",
+            "defaultValue": "eastus",
+            "metadata": {
+                "description": "Location for all resources"
+            }
+        },
+        "appServicePlanName": {
+            "type": "string",
+            "defaultValue": "asp-esg-platform",
+            "metadata": {
+                "description": "Name of the App Service Plan"
+            }
+        },
+        "webAppName": {
+            "type": "string",
+            "metadata": {
+                "description": "Name of the Web App"
+            }
+        },
+        "containerRegistryName": {
+            "type": "string",
+            "metadata": {
+                "description": "Name of the Container Registry"
+            }
+        }
+    },
+    "variables": {
+        "storageAccountName": "[concat('stesgstorage', uniqueString(resourceGroup().id))]",
+        "documentIntelligenceName": "esg-doc-intelligence",
+        "aiFoundryWorkspaceName": "ws-esg-analysis"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Storage/storageAccounts",
+            "apiVersion": "2021-06-01",
+            "name": "[variables('storageAccountName')]",
+            "location": "[parameters('location')]",
+            "sku": {
+                "name": "Standard_LRS"
+            },
+            "kind": "StorageV2",
+            "properties": {
+                "accessTier": "Hot"
+            }
+        },
+        {
+            "type": "Microsoft.CognitiveServices/accounts",
+            "apiVersion": "2021-10-01",
+            "name": "[variables('documentIntelligenceName')]",
+            "location": "[parameters('location')]",
+            "sku": {
+                "name": "S0"
+            },
+            "kind": "FormRecognizer",
+            "properties": {
+                "apiProperties": {},
+                "customSubDomainName": "[variables('documentIntelligenceName')]"
+            }
+        },
+        {
+            "type": "Microsoft.ContainerRegistry/registries",
+            "apiVersion": "2021-06-01-preview",
+            "name": "[parameters('containerRegistryName')]",
+            "location": "[parameters('location')]",
+            "sku": {
+                "name": "Basic"
+            },
+            "properties": {
+                "adminUserEnabled": true
+            }
+        },
+        {
+            "type": "Microsoft.Web/serverfarms",
+            "apiVersion": "2021-02-01",
+            "name": "[parameters('appServicePlanName')]",
+            "location": "[parameters('location')]",
+            "sku": {
+                "name": "B2",
+                "tier": "Basic"
+            },
+            "kind": "linux",
+            "properties": {
+                "reserved": true
+            }
+        },
+        {
+            "type": "Microsoft.Web/sites",
+            "apiVersion": "2021-02-01",
+            "name": "[parameters('webAppName')]",
+            "location": "[parameters('location')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/serverfarms', parameters('appServicePlanName'))]",
+                "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]",
+                "[resourceId('Microsoft.CognitiveServices/accounts', variables('documentIntelligenceName'))]",
+                "[resourceId('Microsoft.ContainerRegistry/registries', parameters('containerRegistryName'))]"
+            ],
+            "kind": "app,linux,container",
+            "properties": {
+                "enabled": true,
+                "serverFarmId": "[resourceId('Microsoft.Web/serverfarms', parameters('appServicePlanName'))]",
+                "siteConfig": {
+                    "numberOfWorkers": 1,
+                    "linuxFxVersion": "[concat('DOCKER|', parameters('containerRegistryName'), '.azurecr.io/esg-platform:latest')]",
+                    "alwaysOn": true,
+                    "appSettings": [
+                        {
+                            "name": "WEBSITES_ENABLE_APP_SERVICE_STORAGE",
+                            "value": "false"
+                        },
+                        {
+                            "name": "WEBSITES_PORT",
+                            "value": "5000"
+                        },
+                        {
+                            "name": "DOCKER_REGISTRY_SERVER_URL",
+                            "value": "[concat('https://', parameters('containerRegistryName'), '.azurecr.io')]"
+                        },
+                        {
+                            "name": "DOCKER_REGISTRY_SERVER_USERNAME",
+                            "value": "[parameters('containerRegistryName')]"
+                        },
+                        {
+                            "name": "DOCKER_REGISTRY_SERVER_PASSWORD",
+                            "value": "[listCredentials(resourceId('Microsoft.ContainerRegistry/registries', parameters('containerRegistryName')), '2021-06-01-preview').passwords[0].value]"
+                        }
+                    ]
+                }
+            }
+        }
+    ],
+    "outputs": {
+        "webAppUrl": {
+            "type": "string",
+            "value": "[concat('https://', parameters('webAppName'), '.azurewebsites.net')]"
+        },
+        "storageConnectionString": {
+            "type": "string",
+            "value": "[concat('DefaultEndpointsProtocol=https;AccountName=', variables('storageAccountName'), ';AccountKey=', listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName')), '2021-06-01').keys[0].value)]"
+        },
+        "documentIntelligenceEndpoint": {
+            "type": "string",
+            "value": "[reference(resourceId('Microsoft.CognitiveServices/accounts', variables('documentIntelligenceName'))).endpoint]"
+        }
+    }
+}
+EOF
+```
+
+## Step 5: Create Frontend Interface
+
+### 5.1 Create Simple HTML Frontend
+
+```bash
+# Create static/index.html
+mkdir -p static/css static/js
+cat > static/index.html << 'EOF'
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ESG Analysis Platform</title>
+    <link href="css/style.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <h1><i class="fas fa-leaf"></i> ESG Analysis Platform</h1>
+            <p>Upload Excel files for comprehensive ESG analysis and reporting</p>
+        </header>
+
+        <main class="main-content">
+            <!-- Upload Section -->
+            <section class="upload-section" id="upload-section">
+                <div class="upload-card">
+                    <h2><i class="fas fa-upload"></i> Upload ESG Data</h2>
+                    <form id="upload-form" enctype="multipart/form-data">
+                        <div class="form-group">
+                            <label for="company-name">Company Name:</label>
+                            <input type="text" id="company-name" name="company_name" required>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="company-context">Company Context (Optional):</label>
+                            <textarea id="company-context" name="company_context" 
+                                placeholder="Provide additional context about your company, industry, or specific ESG focus areas..."></textarea>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="file-upload">Excel File:</label>
+                            <div class="file-upload-wrapper">
+                                <input type="file" id="file-upload" name="file" accept=".xlsx,.xls" required>
+                                <label for="file-upload" class="file-upload-label">
+                                    <i class="fas fa-cloud-upload-alt"></i>
+                                    Choose Excel File
+                                </label>
+                                <span class="file-name"></span>
+                            </div>
+                        </div>
+                        
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-chart-line"></i> Analyze ESG Data
+                        </button>
+                    </form>
+                </div>
+            </section>
+
+            <!-- Loading Section -->
+            <section class="loading-section" id="loading-section" style="display: none;">
+                <div class="loading-card">
+                    <div class="spinner"></div>
+                    <h3>Processing Your ESG Data...</h3>
+                    <p id="loading-status">Uploading file and extracting data...</p>
+                    <div class="progress-bar">
+                        <div class="progress-fill"></div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Results Section -->
+            <section class="results-section" id="results-section" style="display: none;">
+                <div class="results-header">
+                    <h2><i class="fas fa-chart-bar"></i> ESG Analysis Results</h2>
+                    <button id="generate-report-btn" class="btn btn-secondary">
+                        <i class="fas fa-file-pdf"></i> Generate PDF Report
+                    </button>
+                </div>
+
+                <!-- ESG Scores -->
+                <div class="scores-grid">
+                    <div class="score-card environmental">
+                        <div class="score-icon"><i class="fas fa-leaf"></i></div>
+                        <div class="score-content">
+                            <h3>Environmental</h3>
+                            <div class="score-value" id="env-score">-</div>
+                            <div class="score-label">out of 10</div>
+                        </div>
+                    </div>
+                    <div class="score-card social">
+                        <div class="score-icon"><i class="fas fa-users"></i></div>
+                        <div class="score-content">
+                            <h3>Social</h3>
+                            <div class="score-value" id="social-score">-</div>
+                            <div class="score-label">out of 10</div>
+                        </div>
+                    </div>
+                    <div class="score-card governance">
+                        <div class="score-icon"><i class="fas fa-gavel"></i></div>
+                        <div class="score-content">
+                            <h3>Governance</h3>
+                            <div class="score-value" id="governance-score">-</div>
+                            <div class="score-label">out of 10</div>
+                        </div>
+                    </div>
+                    <div class="score-card overall">
+                        <div class="score-icon"><i class="fas fa-trophy"></i></div>
+                        <div class="score-content">
+                            <h3>Overall ESG</h3>
+                            <div class="score-value" id="overall-score">-</div>
+                            <div class="score-label">out of 10</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Executive Summary -->
+                <div class="analysis-card">
+                    <h3><i class="fas fa-clipboard-list"></i> Executive Summary</h3>
+                    <div class="maturity-badge" id="maturity-badge">-</div>
+                    <ul id="executive-summary-list"></ul>
+                </div>
+
+                <!-- Recommendations -->
+                <div class="analysis-card">
+                    <h3><i class="fas fa-lightbulb"></i> Key Recommendations</h3>
+                    <div class="recommendations-tabs">
+                        <button class="tab-btn active" data-tab="high-priority">High Priority</button>
+                        <button class="tab-btn" data-tab="medium-priority">Medium Priority</button>
+                        <button class="tab-btn" data-tab="low-priority">Low Priority</button>
+                    </div>
+                    <div class="tab-content">
+                        <div id="high-priority" class="tab-pane active">
+                            <ul id="high-priority-list"></ul>
+                        </div>
+                        <div id="medium-priority" class="tab-pane">
+                            <ul id="medium-priority-list"></ul>
+                        </div>
+                        <div id="low-priority" class="tab-pane">
+                            <ul id="low-priority-list"></ul>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Implementation Roadmap -->
+                <div class="analysis-card">
+                    <h3><i class="fas fa-road"></i> Implementation Roadmap</h3>
+                    <div class="roadmap-timeline">
+                        <div class="timeline-item">
+                            <div class="timeline-marker short-term"></div>
+                            <div class="timeline-content">
+                                <h4>Short-term (0-6 months)</h4>
+                                <ul id="short-term-list"></ul>
+                            </div>
+                        </div>
+                        <div class="timeline-item">
+                            <div class="timeline-marker medium-term"></div>
+                            <div class="timeline-content">
+                                <h4>Medium-term (6-18 months)</h4>
+                                <ul id="medium-term-list"></ul>
+                            </div>
+                        </div>
+                        <div class="timeline-item">
+                            <div class="timeline-marker long-term"></div>
+                            <div class="timeline-content">
+                                <h4>Long-term (18+ months)</h4>
+                                <ul id="long-term-list"></ul>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Error Section -->
+            <section class="error-section" id="error-section" style="display: none;">
+                <div class="error-card">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <h3>Analysis Error</h3>
+                    <p id="error-message"></p>
+                    <button id="try-again-btn" class="btn btn-primary">Try Again</button>
+                </div>
+            </section>
+        </main>
+
+        <footer class="footer">
+            <p>&copy; 2024 ESG Analysis Platform. Powered by Azure AI Services.</p>
+        </footer>
+    </div>
+
+    <script src="js/app.js"></script>
+</body>
+</html>
+EOF
+```
+
+### 5.2 Create CSS Styles
+
+```bash
+# Create static/css/style.css
+cat > static/css/style.css << 'EOF'
+/* ESG Analysis Platform Styles */
+:root {
+    --primary-color: #2E8B57;
+    --secondary-color: #4682B4;
+    --accent-color: #FFD700;
+    --text-color: #333;
+    --background-color: #f8f9fa;
+    --card-background: #ffffff;
+    --border-color: #e0e0e0;
+    --success-color: #28a745;
+    --warning-color: #ffc107;
+    --danger-color: #dc3545;
+    --info-color: #17a2b8;
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    line-height: 1.6;
+    color: var(--text-color);
+    background-color: var(--background-color);
+}
+
+.container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 20px;
+}
+
+/* Header Styles */
+.header {
+    text-align: center;
+    margin-bottom: 2rem;
+    padding: 2rem 0;
+    background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+    color: white;
+    border-radius: 12px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.header h1 {
+    font-size: 2.5rem;
+    margin-bottom: 0.5rem;
+    font-weight: 600;
+}
+
+.header p {
+    font-size: 1.1rem;
+    opacity: 0.9;
+}
+
+/* Card Styles */
+.upload-card, .loading-card, .analysis-card, .error-card {
+    background: var(--card-background);
+    border-radius: 12px;
+    padding: 2rem;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    margin-bottom: 2rem;
+    border: 1px solid var(--border-color);
+}
+
+.upload-card h2, .analysis-card h3 {
+    color: var(--primary-color);
+    margin-bottom: 1.5rem;
+    font-size: 1.5rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+/* Form Styles */
+.form-group {
+    margin-bottom: 1.5rem;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 0.5rem;
+    font-weight: 500;
+    color: var(--text-color);
+}
+
+.form-group input[type="text"],
+.form-group textarea {
+    width: 100%;
+    padding: 0.75rem;
+    border: 2px solid var(--border-color);
+    border-radius: 6px;
+    font-size: 1rem;
+    transition: border-color 0.3s ease;
+}
+
+.form-group input[type="text"]:focus,
+.form-group textarea:focus {
+    outline: none;
+    border-color: var(--primary-color);
+}
+
+.form-group textarea {
+    height: 100px;
+    resize: vertical;
+}
+
+/* File Upload Styles */
+.file-upload-wrapper {
+    position: relative;
+}
+
+.file-upload-wrapper input[type="file"] {
+    position: absolute;
+    opacity: 0;
+    width: 100%;
+    height: 100%;
+    cursor: pointer;
+}
+
+.file-upload-label {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    padding: 1rem;
+    border: 2px dashed var(--border-color);
+    border-radius: 6px;
+    background-color: #f8f9fa;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    color: var(--text-color);
+    font-weight: 500;
+}
+
+.file-upload-label:hover {
+    border-color: var(--primary-color);
+    background-color: rgba(46, 139, 87, 0.1);
+}
+
+.file-name {
+    margin-top: 0.5rem;
+    font-size: 0.9rem;
+    color: var(--primary-color);
+    font-weight: 500;
+}
+
+/* Button Styles */
+.btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.75rem 1.5rem;
+    border: none;
+    border-radius: 6px;
+    font-size: 1rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    text-decoration: none;
+}
+
+.btn-primary {
+    background-color: var(--primary-color);
+    color: white;
+}
+
+.btn-primary:hover {
+    background-color: #246743;
+    transform: translateY(-2px);
+}
+
+.btn-secondary {
+    background-color: var(--secondary-color);
+    color: white;
+}
+
+.btn-secondary:hover {
+    background-color: #3a6d94;
+    transform: translateY(-2px);
+}
+
+/* Loading Styles */
+.loading-card {
+    text-align: center;
+}
+
+.spinner {
+    width: 50px;
+    height: 50px;
+    border: 4px solid var(--border-color);
+    border-top: 4px solid var(--primary-color);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    margin: 0 auto 1rem;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+.progress-bar {
+    width: 100%;
+    height: 8px;
+    background-color: var(--border-color);
+    border-radius: 4px;
+    overflow: hidden;
+    margin-top: 1rem;
+}
+
+.progress-fill {
+    height: 100%;
+    background-color: var(--primary-color);
+    border-radius: 4px;
+    animation: progress 3s ease-in-out infinite;
+}
+
+@keyframes progress {
+    0% { width: 0%; }
+    50% { width: 70%; }
+    100% { width: 100%; }
+}
+
+/* Results Styles */
+.results-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 2rem;
+}
+
+.results-header h2 {
+    color: var(--primary-color);
+    font-size: 2rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+/* Score Cards */
+.scores-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 1.5rem;
+    margin-bottom: 2rem;
+}
+
+.score-card {
+    background: var(--card-background);
+    border-radius: 12px;
+    padding: 1.5rem;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    border: 1px solid var(--border-color);
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    transition: transform 0.3s ease;
+}
+
+.score-card:hover {
+    transform: translateY(-4px);
+}
+
+.score-card.environmental {
+    border-left: 4px solid var(--primary-color);
+}
+
+.score-card.social {
+    border-left: 4px solid var(--info-color);
+}
+
+.score-card.governance {
+    border-left: 4px solid var(--secondary-color);
+}
+
+.score-card.overall {
+    border-left: 4px solid var(--accent-color);
+}
+
+.score-icon {
+    font-size: 2rem;
+}
+
+.score-card.environmental .score-icon {
+    color: var(--primary-color);
+}
+
+.score-card.social .score-icon {
+    color: var(--info-color);
+}
+
+.score-card.governance .score-icon {
+    color: var(--secondary-color);
+}
+
+.score-card.overall .score-icon {
+    color: var(--accent-color);
+}
+
+.score-content h3 {
+    font-size: 1.1rem;
+    margin-bottom: 0.5rem;
+    color: var(--text-color);
+}
+
+.score-value {
+    font-size: 2rem;
+    font-weight: bold;
+    color: var(--primary-color);
+}
+
+.score-label {
+    font-size: 0.9rem;
+    color: #666;
+}
+
+/* Maturity Badge */
+.maturity-badge {
+    display: inline-block;
+    padding: 0.5rem 1rem;
+    border-radius: 20px;
+    font-weight: 600;
+    font-size: 0.9rem;
+    margin-bottom: 1rem;
+    background-color: var(--info-color);
+    color: white;
+}
+
+/* Tabs */
+.recommendations-tabs {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+    border-bottom: 2px solid var(--border-color);
+}
+
+.tab-btn {
+    padding: 0.75rem 1rem;
+    border: none;
+    background: none;
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    transition: all 0.3s ease;
+    font-weight: 500;
+}
+
+.tab-btn.active {
+    border-bottom-color: var(--primary-color);
+    color: var(--primary-color);
+}
+
+.tab-pane {
+    display: none;
+}
+
+.tab-pane.active {
+    display: block;
+}
+
+.tab-pane ul {
+    list-style: none;
+}
+
+.tab-pane li {
+    padding: 0.5rem 0;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.tab-pane li:before {
+    content: "•";
+    color: var(--primary-color);
+    font-weight: bold;
+    display: inline-block;
+    width: 1em;
+    margin-left: -1em;
+}
+
+/* Timeline */
+.roadmap-timeline {
+    position: relative;
+    padding-left: 2rem;
+}
+
+.roadmap-timeline:before {
+    content: '';
+    position: absolute;
+    left: 1rem;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    background-color: var(--border-color);
+}
+
+.timeline-item {
+    position: relative;
+    margin-bottom: 2rem;
+}
+
+.timeline-marker {
+    position: absolute;
+    left: -2.5rem;
+    top: 0.5rem;
+    width: 1rem;
+    height: 1rem;
+    border-radius: 50%;
+    border: 2px solid white;
+    box-shadow: 0 0 0 2px var(--border-color);
+}
+
+.timeline-marker.short-term {
+    background-color: var(--success-color);
+}
+
+.timeline-marker.medium-term {
+    background-color: var(--warning-color);
+}
+
+.timeline-marker.long-term {
+    background-color: var(--info-color);
+}
+
+.timeline-content h4 {
+    color: var(--primary-color);
+    margin-bottom: 0.5rem;
+}
+
+.timeline-content ul {
+    list-style: none;
+}
+
+.timeline-content li {
+    padding: 0.25rem 0;
+}
+
+.timeline-content li:before {
+    content: "→";
+    color: var(--primary-color);
+    font-weight: bold;
+    display: inline-block;
+    width: 1em;
+    margin-left: -1em;
+}
+
+/* Error Styles */
+.error-card {
+    text-align: center;
+    border-left: 4px solid var(--danger-color);
+}
+
+.error-card i {
+    font-size: 3rem;
+    color: var(--danger-color);
+    margin-bottom: 1rem;
