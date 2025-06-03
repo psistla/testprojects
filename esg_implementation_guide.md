@@ -1831,195 +1831,195 @@ EOF
 
 ## Step 5: Create Frontend Interface
 
-### 5.1 Create Simple HTML Frontend
+### 5.1 Create HTML Template
 
 ```bash
-# Create static/index.html
-mkdir -p static/css static/js
-cat > static/index.html << 'EOF'
+# Create templates directory
+mkdir -p templates static/{js,css,uploads}
+
+# Create templates/index.html
+cat > templates/index.html << 'EOF'
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ESG Analysis Platform</title>
-    <link href="css/style.css" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link href="static/css/styles.css" rel="stylesheet">
 </head>
 <body>
     <div class="container">
+        <!-- Header -->
         <header class="header">
-            <h1><i class="fas fa-leaf"></i> ESG Analysis Platform</h1>
-            <p>Upload Excel files for comprehensive ESG analysis and reporting</p>
+            <div class="header-content">
+                <h1><i class="fas fa-leaf"></i> ESG Analysis Platform</h1>
+                <p>Upload your ESG data and get comprehensive analysis and reporting</p>
+            </div>
         </header>
 
-        <main class="main-content">
-            <!-- Upload Section -->
-            <section class="upload-section" id="upload-section">
-                <div class="upload-card">
-                    <h2><i class="fas fa-upload"></i> Upload ESG Data</h2>
-                    <form id="upload-form" enctype="multipart/form-data">
-                        <div class="form-group">
-                            <label for="company-name">Company Name:</label>
-                            <input type="text" id="company-name" name="company_name" required>
+        <!-- Upload Section -->
+        <section class="upload-section">
+            <div class="upload-container">
+                <h2>Upload Excel File</h2>
+                <form id="uploadForm" enctype="multipart/form-data">
+                    <div class="form-group">
+                        <label for="companyName">Company Name:</label>
+                        <input type="text" id="companyName" name="company_name" placeholder="Enter company name" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="companyContext">Company Context (Optional):</label>
+                        <textarea id="companyContext" name="company_context" 
+                                placeholder="Provide additional context about your company, industry, or specific ESG focus areas..."
+                                rows="3"></textarea>
+                    </div>
+                    
+                    <div class="file-upload-area" id="fileUploadArea">
+                        <div class="upload-icon">
+                            <i class="fas fa-cloud-upload-alt"></i>
                         </div>
-                        
-                        <div class="form-group">
-                            <label for="company-context">Company Context (Optional):</label>
-                            <textarea id="company-context" name="company_context" 
-                                placeholder="Provide additional context about your company, industry, or specific ESG focus areas..."></textarea>
+                        <p>Drag and drop your Excel file here or <span class="browse-link">browse</span></p>
+                        <input type="file" id="fileInput" name="file" accept=".xlsx,.xls" hidden>
+                        <div class="file-info" id="fileInfo" style="display: none;">
+                            <span id="fileName"></span>
+                            <button type="button" id="removeFile" class="remove-btn">×</button>
                         </div>
-                        
-                        <div class="form-group">
-                            <label for="file-upload">Excel File:</label>
-                            <div class="file-upload-wrapper">
-                                <input type="file" id="file-upload" name="file" accept=".xlsx,.xls" required>
-                                <label for="file-upload" class="file-upload-label">
-                                    <i class="fas fa-cloud-upload-alt"></i>
-                                    Choose Excel File
-                                </label>
-                                <span class="file-name"></span>
-                            </div>
-                        </div>
-                        
-                        <button type="submit" class="btn btn-primary">
-                            <i class="fas fa-chart-line"></i> Analyze ESG Data
-                        </button>
-                    </form>
-                </div>
-            </section>
+                    </div>
+                    
+                    <button type="submit" id="submitBtn" class="submit-btn" disabled>
+                        <i class="fas fa-analytics"></i> Analyze ESG Data
+                    </button>
+                </form>
+            </div>
+        </section>
 
-            <!-- Loading Section -->
-            <section class="loading-section" id="loading-section" style="display: none;">
-                <div class="loading-card">
-                    <div class="spinner"></div>
-                    <h3>Processing Your ESG Data...</h3>
-                    <p id="loading-status">Uploading file and extracting data...</p>
-                    <div class="progress-bar">
-                        <div class="progress-fill"></div>
+        <!-- Progress Section -->
+        <section class="progress-section" id="progressSection" style="display: none;">
+            <div class="progress-container">
+                <h3>Processing Your ESG Data</h3>
+                <div class="progress-steps">
+                    <div class="step" id="step1">
+                        <div class="step-icon"><i class="fas fa-upload"></i></div>
+                        <div class="step-text">Uploading File</div>
+                    </div>
+                    <div class="step" id="step2">
+                        <div class="step-icon"><i class="fas fa-cogs"></i></div>
+                        <div class="step-text">Processing Data</div>
+                    </div>
+                    <div class="step" id="step3">
+                        <div class="step-icon"><i class="fas fa-brain"></i></div>
+                        <div class="step-text">AI Analysis</div>
+                    </div>
+                    <div class="step" id="step4">
+                        <div class="step-icon"><i class="fas fa-chart-line"></i></div>
+                        <div class="step-text">Generating Insights</div>
                     </div>
                 </div>
-            </section>
+                <div class="progress-bar">
+                    <div class="progress-fill" id="progressFill"></div>
+                </div>
+                <div class="progress-text" id="progressText">Initializing...</div>
+            </div>
+        </section>
 
-            <!-- Results Section -->
-            <section class="results-section" id="results-section" style="display: none;">
-                <div class="results-header">
-                    <h2><i class="fas fa-chart-bar"></i> ESG Analysis Results</h2>
-                    <button id="generate-report-btn" class="btn btn-secondary">
-                        <i class="fas fa-file-pdf"></i> Generate PDF Report
-                    </button>
+        <!-- Results Section -->
+        <section class="results-section" id="resultsSection" style="display: none;">
+            <div class="results-container">
+                <h2>ESG Analysis Results</h2>
+                
+                <!-- Executive Summary -->
+                <div class="result-card">
+                    <h3><i class="fas fa-star"></i> Executive Summary</h3>
+                    <div id="executiveSummary" class="summary-content"></div>
+                    <div class="esg-maturity">
+                        <span>ESG Maturity Level:</span>
+                        <span id="maturityLevel" class="maturity-badge"></span>
+                    </div>
                 </div>
 
                 <!-- ESG Scores -->
-                <div class="scores-grid">
-                    <div class="score-card environmental">
-                        <div class="score-icon"><i class="fas fa-leaf"></i></div>
-                        <div class="score-content">
-                            <h3>Environmental</h3>
-                            <div class="score-value" id="env-score">-</div>
-                            <div class="score-label">out of 10</div>
-                        </div>
-                    </div>
-                    <div class="score-card social">
-                        <div class="score-icon"><i class="fas fa-users"></i></div>
-                        <div class="score-content">
-                            <h3>Social</h3>
-                            <div class="score-value" id="social-score">-</div>
-                            <div class="score-label">out of 10</div>
-                        </div>
-                    </div>
-                    <div class="score-card governance">
-                        <div class="score-icon"><i class="fas fa-gavel"></i></div>
-                        <div class="score-content">
-                            <h3>Governance</h3>
-                            <div class="score-value" id="governance-score">-</div>
-                            <div class="score-label">out of 10</div>
-                        </div>
-                    </div>
-                    <div class="score-card overall">
-                        <div class="score-icon"><i class="fas fa-trophy"></i></div>
-                        <div class="score-content">
-                            <h3>Overall ESG</h3>
-                            <div class="score-value" id="overall-score">-</div>
-                            <div class="score-label">out of 10</div>
-                        </div>
+                <div class="result-card">
+                    <h3><i class="fas fa-chart-pie"></i> ESG Performance Scores</h3>
+                    <div class="scores-grid" id="scoresGrid">
+                        <!-- Scores will be populated by JavaScript -->
                     </div>
                 </div>
 
-                <!-- Executive Summary -->
-                <div class="analysis-card">
-                    <h3><i class="fas fa-clipboard-list"></i> Executive Summary</h3>
-                    <div class="maturity-badge" id="maturity-badge">-</div>
-                    <ul id="executive-summary-list"></ul>
+                <!-- Performance Breakdown -->
+                <div class="performance-tabs">
+                    <div class="tab-buttons">
+                        <button class="tab-btn active" data-tab="environmental">
+                            <i class="fas fa-leaf"></i> Environmental
+                        </button>
+                        <button class="tab-btn" data-tab="social">
+                            <i class="fas fa-users"></i> Social
+                        </button>
+                        <button class="tab-btn" data-tab="governance">
+                            <i class="fas fa-balance-scale"></i> Governance
+                        </button>
+                    </div>
+                    
+                    <div class="tab-content">
+                        <div id="environmental" class="tab-pane active">
+                            <h4>Environmental Performance</h4>
+                            <div id="environmentalContent" class="performance-content"></div>
+                        </div>
+                        <div id="social" class="tab-pane">
+                            <h4>Social Performance</h4>
+                            <div id="socialContent" class="performance-content"></div>
+                        </div>
+                        <div id="governance" class="tab-pane">
+                            <h4>Governance Performance</h4>
+                            <div id="governanceContent" class="performance-content"></div>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- Recommendations -->
-                <div class="analysis-card">
-                    <h3><i class="fas fa-lightbulb"></i> Key Recommendations</h3>
-                    <div class="recommendations-tabs">
-                        <button class="tab-btn active" data-tab="high-priority">High Priority</button>
-                        <button class="tab-btn" data-tab="medium-priority">Medium Priority</button>
-                        <button class="tab-btn" data-tab="low-priority">Low Priority</button>
-                    </div>
-                    <div class="tab-content">
-                        <div id="high-priority" class="tab-pane active">
-                            <ul id="high-priority-list"></ul>
-                        </div>
-                        <div id="medium-priority" class="tab-pane">
-                            <ul id="medium-priority-list"></ul>
-                        </div>
-                        <div id="low-priority" class="tab-pane">
-                            <ul id="low-priority-list"></ul>
-                        </div>
+                <div class="result-card">
+                    <h3><i class="fas fa-lightbulb"></i> Recommendations</h3>
+                    <div class="recommendations-grid" id="recommendationsGrid">
+                        <!-- Recommendations will be populated by JavaScript -->
                     </div>
                 </div>
 
-                <!-- Implementation Roadmap -->
-                <div class="analysis-card">
-                    <h3><i class="fas fa-road"></i> Implementation Roadmap</h3>
-                    <div class="roadmap-timeline">
-                        <div class="timeline-item">
-                            <div class="timeline-marker short-term"></div>
-                            <div class="timeline-content">
-                                <h4>Short-term (0-6 months)</h4>
-                                <ul id="short-term-list"></ul>
-                            </div>
-                        </div>
-                        <div class="timeline-item">
-                            <div class="timeline-marker medium-term"></div>
-                            <div class="timeline-content">
-                                <h4>Medium-term (6-18 months)</h4>
-                                <ul id="medium-term-list"></ul>
-                            </div>
-                        </div>
-                        <div class="timeline-item">
-                            <div class="timeline-marker long-term"></div>
-                            <div class="timeline-content">
-                                <h4>Long-term (18+ months)</h4>
-                                <ul id="long-term-list"></ul>
-                            </div>
-                        </div>
-                    </div>
+                <!-- Actions -->
+                <div class="actions-section">
+                    <button id="generateReportBtn" class="action-btn primary">
+                        <i class="fas fa-file-pdf"></i> Generate PDF Report
+                    </button>
+                    <button id="downloadDataBtn" class="action-btn secondary">
+                        <i class="fas fa-download"></i> Download Data
+                    </button>
+                    <button id="newAnalysisBtn" class="action-btn">
+                        <i class="fas fa-plus"></i> New Analysis
+                    </button>
                 </div>
-            </section>
+            </div>
+        </section>
 
-            <!-- Error Section -->
-            <section class="error-section" id="error-section" style="display: none;">
-                <div class="error-card">
-                    <i class="fas fa-exclamation-triangle"></i>
-                    <h3>Analysis Error</h3>
-                    <p id="error-message"></p>
-                    <button id="try-again-btn" class="btn btn-primary">Try Again</button>
-                </div>
-            </section>
-        </main>
-
+        <!-- Footer -->
         <footer class="footer">
-            <p>&copy; 2024 ESG Analysis Platform. Powered by Azure AI Services.</p>
+            <p>&copy; 2024 ESG Analysis Platform. Built with Azure AI Services.</p>
         </footer>
     </div>
 
-    <script src="js/app.js"></script>
+    <!-- Loading Overlay -->
+    <div class="loading-overlay" id="loadingOverlay" style="display: none;">
+        <div class="spinner"></div>
+        <p>Processing your request...</p>
+    </div>
+
+    <!-- Notification -->
+    <div class="notification" id="notification" style="display: none;">
+        <div class="notification-content">
+            <span id="notificationMessage"></span>
+            <button id="closeNotification" class="close-btn">×</button>
+        </div>
+    </div>
+
+    <script src="static/js/app.js"></script>
 </body>
 </html>
 EOF
@@ -2028,21 +2028,23 @@ EOF
 ### 5.2 Create CSS Styles
 
 ```bash
-# Create static/css/style.css
-cat > static/css/style.css << 'EOF'
+# Create static/css/styles.css
+cat > static/css/styles.css << 'EOF'
 /* ESG Analysis Platform Styles */
+
 :root {
     --primary-color: #2E8B57;
-    --secondary-color: #4682B4;
-    --accent-color: #FFD700;
-    --text-color: #333;
-    --background-color: #f8f9fa;
-    --card-background: #ffffff;
-    --border-color: #e0e0e0;
+    --secondary-color: #228B22;
+    --accent-color: #32CD32;
     --success-color: #28a745;
     --warning-color: #ffc107;
     --danger-color: #dc3545;
     --info-color: #17a2b8;
+    --light-color: #f8f9fa;
+    --dark-color: #343a40;
+    --border-radius: 8px;
+    --box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    --transition: all 0.3s ease;
 }
 
 * {
@@ -2054,58 +2056,60 @@ cat > static/css/style.css << 'EOF'
 body {
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     line-height: 1.6;
-    color: var(--text-color);
-    background-color: var(--background-color);
+    color: var(--dark-color);
+    background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+    min-height: 100vh;
 }
 
 .container {
     max-width: 1200px;
     margin: 0 auto;
-    padding: 20px;
+    padding: 0 20px;
 }
 
 /* Header Styles */
 .header {
-    text-align: center;
-    margin-bottom: 2rem;
-    padding: 2rem 0;
     background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
     color: white;
-    border-radius: 12px;
-    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    padding: 2rem 0;
+    text-align: center;
+    margin-bottom: 2rem;
 }
 
-.header h1 {
+.header-content h1 {
     font-size: 2.5rem;
     margin-bottom: 0.5rem;
-    font-weight: 600;
+    font-weight: 300;
 }
 
-.header p {
+.header-content h1 i {
+    margin-right: 1rem;
+    color: var(--accent-color);
+}
+
+.header-content p {
     font-size: 1.1rem;
     opacity: 0.9;
 }
 
-/* Card Styles */
-.upload-card, .loading-card, .analysis-card, .error-card {
-    background: var(--card-background);
-    border-radius: 12px;
-    padding: 2rem;
-    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+/* Upload Section */
+.upload-section {
     margin-bottom: 2rem;
-    border: 1px solid var(--border-color);
 }
 
-.upload-card h2, .analysis-card h3 {
+.upload-container {
+    background: white;
+    padding: 2rem;
+    border-radius: var(--border-radius);
+    box-shadow: var(--box-shadow);
+}
+
+.upload-container h2 {
     color: var(--primary-color);
     margin-bottom: 1.5rem;
-    font-size: 1.5rem;
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
+    font-size: 1.8rem;
 }
 
-/* Form Styles */
 .form-group {
     margin-bottom: 1.5rem;
 }
@@ -2113,274 +2117,384 @@ body {
 .form-group label {
     display: block;
     margin-bottom: 0.5rem;
-    font-weight: 500;
-    color: var(--text-color);
+    font-weight: 600;
+    color: var(--dark-color);
 }
 
-.form-group input[type="text"],
+.form-group input,
 .form-group textarea {
     width: 100%;
     padding: 0.75rem;
-    border: 2px solid var(--border-color);
-    border-radius: 6px;
+    border: 2px solid #e9ecef;
+    border-radius: var(--border-radius);
     font-size: 1rem;
-    transition: border-color 0.3s ease;
+    transition: var(--transition);
 }
 
-.form-group input[type="text"]:focus,
+.form-group input:focus,
 .form-group textarea:focus {
     outline: none;
     border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px rgba(46, 139, 87, 0.1);
 }
 
-.form-group textarea {
-    height: 100px;
-    resize: vertical;
+/* File Upload Area */
+.file-upload-area {
+    border: 3px dashed #ddd;
+    border-radius: var(--border-radius);
+    padding: 3rem 2rem;
+    text-align: center;
+    cursor: pointer;
+    transition: var(--transition);
+    margin-bottom: 1.5rem;
 }
 
-/* File Upload Styles */
-.file-upload-wrapper {
-    position: relative;
+.file-upload-area:hover {
+    border-color: var(--primary-color);
+    background-color: rgba(46, 139, 87, 0.05);
 }
 
-.file-upload-wrapper input[type="file"] {
-    position: absolute;
-    opacity: 0;
-    width: 100%;
-    height: 100%;
+.file-upload-area.dragover {
+    border-color: var(--accent-color);
+    background-color: rgba(50, 205, 50, 0.1);
+}
+
+.upload-icon {
+    font-size: 3rem;
+    color: var(--primary-color);
+    margin-bottom: 1rem;
+}
+
+.file-upload-area p {
+    font-size: 1.1rem;
+    color: #666;
+}
+
+.browse-link {
+    color: var(--primary-color);
+    text-decoration: underline;
     cursor: pointer;
 }
 
-.file-upload-label {
+.file-info {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 1rem;
+    padding: 1rem;
+    background: rgba(46, 139, 87, 0.1);
+    border-radius: var(--border-radius);
+    margin-top: 1rem;
+}
+
+.remove-btn {
+    background: var(--danger-color);
+    color: white;
+    border: none;
+    border-radius: 50%;
+    width: 30px;
+    height: 30px;
+    cursor: pointer;
+    font-size: 1.2rem;
+    transition: var(--transition);
+}
+
+.remove-btn:hover {
+    background: #c82333;
+}
+
+/* Submit Button */
+.submit-btn {
+    width: 100%;
+    padding: 1rem 2rem;
+    background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+    color: white;
+    border: none;
+    border-radius: var(--border-radius);
+    font-size: 1.1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: var(--transition);
     display: flex;
     align-items: center;
     justify-content: center;
     gap: 0.5rem;
-    padding: 1rem;
-    border: 2px dashed var(--border-color);
-    border-radius: 6px;
-    background-color: #f8f9fa;
-    cursor: pointer;
-    transition: all 0.3s ease;
-    color: var(--text-color);
-    font-weight: 500;
 }
 
-.file-upload-label:hover {
-    border-color: var(--primary-color);
-    background-color: rgba(46, 139, 87, 0.1);
-}
-
-.file-name {
-    margin-top: 0.5rem;
-    font-size: 0.9rem;
-    color: var(--primary-color);
-    font-weight: 500;
-}
-
-/* Button Styles */
-.btn {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.5rem;
-    padding: 0.75rem 1.5rem;
-    border: none;
-    border-radius: 6px;
-    font-size: 1rem;
-    font-weight: 500;
-    cursor: pointer;
-    transition: all 0.3s ease;
-    text-decoration: none;
-}
-
-.btn-primary {
-    background-color: var(--primary-color);
-    color: white;
-}
-
-.btn-primary:hover {
-    background-color: #246743;
+.submit-btn:hover:not(:disabled) {
     transform: translateY(-2px);
+    box-shadow: 0 4px 15px rgba(46, 139, 87, 0.3);
 }
 
-.btn-secondary {
-    background-color: var(--secondary-color);
-    color: white;
+.submit-btn:disabled {
+    background: #ccc;
+    cursor: not-allowed;
 }
 
-.btn-secondary:hover {
-    background-color: #3a6d94;
-    transform: translateY(-2px);
+/* Progress Section */
+.progress-section {
+    margin-bottom: 2rem;
 }
 
-/* Loading Styles */
-.loading-card {
+.progress-container {
+    background: white;
+    padding: 2rem;
+    border-radius: var(--border-radius);
+    box-shadow: var(--box-shadow);
     text-align: center;
 }
 
-.spinner {
-    width: 50px;
-    height: 50px;
-    border: 4px solid var(--border-color);
-    border-top: 4px solid var(--primary-color);
-    border-radius: 50%;
-    animation: spin 1s linear infinite;
-    margin: 0 auto 1rem;
+.progress-container h3 {
+    color: var(--primary-color);
+    margin-bottom: 2rem;
 }
 
-@keyframes spin {
-    0% { transform: rotate(0deg); }
-    100% { transform: rotate(360deg); }
+.progress-steps {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 2rem;
+    position: relative;
+}
+
+.progress-steps::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: #e9ecef;
+    z-index: 1;
+}
+
+.step {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    position: relative;
+    z-index: 2;
+}
+
+.step-icon {
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    background: #e9ecef;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5rem;
+    color: #6c757d;
+    margin-bottom: 0.5rem;
+    transition: var(--transition);
+}
+
+.step.active .step-icon {
+    background: var(--primary-color);
+    color: white;
+}
+
+.step.completed .step-icon {
+    background: var(--success-color);
+    color: white;
+}
+
+.step-text {
+    font-size: 0.9rem;
+    color: #6c757d;
+    font-weight: 500;
+}
+
+.step.active .step-text,
+.step.completed .step-text {
+    color: var(--primary-color);
+    font-weight: 600;
 }
 
 .progress-bar {
     width: 100%;
     height: 8px;
-    background-color: var(--border-color);
+    background: #e9ecef;
     border-radius: 4px;
     overflow: hidden;
-    margin-top: 1rem;
+    margin-bottom: 1rem;
 }
 
 .progress-fill {
     height: 100%;
-    background-color: var(--primary-color);
-    border-radius: 4px;
-    animation: progress 3s ease-in-out infinite;
+    background: linear-gradient(90deg, var(--primary-color), var(--accent-color));
+    width: 0%;
+    transition: width 0.5s ease;
 }
 
-@keyframes progress {
-    0% { width: 0%; }
-    50% { width: 70%; }
-    100% { width: 100%; }
-}
-
-/* Results Styles */
-.results-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 2rem;
-}
-
-.results-header h2 {
+.progress-text {
+    font-size: 1rem;
     color: var(--primary-color);
-    font-size: 2rem;
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-}
-
-/* Score Cards */
-.scores-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-    gap: 1.5rem;
-    margin-bottom: 2rem;
-}
-
-.score-card {
-    background: var(--card-background);
-    border-radius: 12px;
-    padding: 1.5rem;
-    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-    border: 1px solid var(--border-color);
-    display: flex;
-    align-items: center;
-    gap: 1rem;
-    transition: transform 0.3s ease;
-}
-
-.score-card:hover {
-    transform: translateY(-4px);
-}
-
-.score-card.environmental {
-    border-left: 4px solid var(--primary-color);
-}
-
-.score-card.social {
-    border-left: 4px solid var(--info-color);
-}
-
-.score-card.governance {
-    border-left: 4px solid var(--secondary-color);
-}
-
-.score-card.overall {
-    border-left: 4px solid var(--accent-color);
-}
-
-.score-icon {
-    font-size: 2rem;
-}
-
-.score-card.environmental .score-icon {
-    color: var(--primary-color);
-}
-
-.score-card.social .score-icon {
-    color: var(--info-color);
-}
-
-.score-card.governance .score-icon {
-    color: var(--secondary-color);
-}
-
-.score-card.overall .score-icon {
-    color: var(--accent-color);
-}
-
-.score-content h3 {
-    font-size: 1.1rem;
-    margin-bottom: 0.5rem;
-    color: var(--text-color);
-}
-
-.score-value {
-    font-size: 2rem;
-    font-weight: bold;
-    color: var(--primary-color);
-}
-
-.score-label {
-    font-size: 0.9rem;
-    color: #666;
-}
-
-/* Maturity Badge */
-.maturity-badge {
-    display: inline-block;
-    padding: 0.5rem 1rem;
-    border-radius: 20px;
-    font-weight: 600;
-    font-size: 0.9rem;
-    margin-bottom: 1rem;
-    background-color: var(--info-color);
-    color: white;
-}
-
-/* Tabs */
-.recommendations-tabs {
-    display: flex;
-    gap: 0.5rem;
-    margin-bottom: 1rem;
-    border-bottom: 2px solid var(--border-color);
-}
-
-.tab-btn {
-    padding: 0.75rem 1rem;
-    border: none;
-    background: none;
-    cursor: pointer;
-    border-bottom: 2px solid transparent;
-    transition: all 0.3s ease;
     font-weight: 500;
 }
 
-.tab-btn.active {
-    border-bottom-color: var(--primary-color);
+/* Results Section */
+.results-section {
+    margin-bottom: 2rem;
+}
+
+.results-container {
+    background: white;
+    border-radius: var(--border-radius);
+    box-shadow: var(--box-shadow);
+    overflow: hidden;
+}
+
+.results-container h2 {
+    background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+    color: white;
+    padding: 1.5rem 2rem;
+    margin: 0;
+    font-size: 1.8rem;
+}
+
+/* Result Cards */
+.result-card {
+    padding: 2rem;
+    border-bottom: 1px solid #e9ecef;
+}
+
+.result-card:last-child {
+    border-bottom: none;
+}
+
+.result-card h3 {
     color: var(--primary-color);
+    margin-bottom: 1rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.summary-content {
+    margin-bottom: 1rem;
+}
+
+.summary-content ul {
+    list-style: none;
+    padding: 0;
+}
+
+.summary-content li {
+    padding: 0.5rem 0;
+    border-left: 3px solid var(--primary-color);
+    padding-left: 1rem;
+    margin-bottom: 0.5rem;
+    background: rgba(46, 139, 87, 0.05);
+}
+
+.esg-maturity {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    font-weight: 600;
+}
+
+.maturity-badge {
+    padding: 0.5rem 1rem;
+    border-radius: 20px;
+    color: white;
+    font-size: 0.9rem;
+}
+
+.maturity-badge.Leading {
+    background: var(--success-color);
+}
+
+.maturity-badge.Advanced {
+    background: var(--info-color);
+}
+
+.maturity-badge.Developing {
+    background: var(--warning-color);
+}
+
+.maturity-badge.Emerging {
+    background: var(--danger-color);
+}
+
+/* Scores Grid */
+.scores-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1.5rem;
+}
+
+.score-item {
+    text-align: center;
+    padding: 1.5rem;
+    border-radius: var(--border-radius);
+    background: linear-gradient(135deg, #f8f9fa, #e9ecef);
+}
+
+.score-value {
+    font-size: 2.5rem;
+    font-weight: bold;
+    margin-bottom: 0.5rem;
+}
+
+.score-label {
+    font-size: 1rem;
+    color: var(--dark-color);
+    font-weight: 600;
+}
+
+.score-item.environmental .score-value {
+    color: var(--success-color);
+}
+
+.score-item.social .score-value {
+    color: var(--info-color);
+}
+
+.score-item.governance .score-value {
+    color: var(--warning-color);
+}
+
+.score-item.overall .score-value {
+    color: var(--primary-color);
+}
+
+/* Performance Tabs */
+.performance-tabs {
+    padding: 2rem;
+    border-bottom: 1px solid #e9ecef;
+}
+
+.tab-buttons {
+    display: flex;
+    border-bottom: 2px solid #e9ecef;
+    margin-bottom: 2rem;
+}
+
+.tab-btn {
+    flex: 1;
+    padding: 1rem;
+    border: none;
+    background: none;
+    font-size: 1rem;
+    font-weight: 600;
+    color: #6c757d;
+    cursor: pointer;
+    transition: var(--transition);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+}
+
+.tab-btn:hover {
+    color: var(--primary-color);
+}
+
+.tab-btn.active {
+    color: var(--primary-color);
+    border-bottom: 3px solid var(--primary-color);
 }
 
 .tab-pane {
@@ -2391,97 +2505,376 @@ body {
     display: block;
 }
 
-.tab-pane ul {
-    list-style: none;
+.performance-content {
+    line-height: 1.8;
+    color: #495057;
 }
 
-.tab-pane li {
-    padding: 0.5rem 0;
-    border-bottom: 1px solid var(--border-color);
+/* Recommendations Grid */
+.recommendations-grid {
+    display: grid;
+    gap: 1.5rem;
 }
 
-.tab-pane li:before {
-    content: "•";
+.recommendation-category {
+    border-left: 4px solid var(--primary-color);
+    padding-left: 1rem;
+}
+
+.recommendation-category h4 {
     color: var(--primary-color);
-    font-weight: bold;
-    display: inline-block;
-    width: 1em;
-    margin-left: -1em;
+    margin-bottom: 1rem;
 }
 
-/* Timeline */
-.roadmap-timeline {
+.recommendation-category.high-priority {
+    border-left-color: var(--danger-color);
+}
+
+.recommendation-category.high-priority h4 {
+    color: var(--danger-color);
+}
+
+.recommendation-category.medium-priority {
+    border-left-color: var(--warning-color);
+}
+
+.recommendation-category.medium-priority h4 {
+    color: var(--warning-color);
+}
+
+.recommendation-category.low-priority {
+    border-left-color: var(--success-color);
+}
+
+.recommendation-category.low-priority h4 {
+    color: var(--success-color);
+}
+
+.recommendation-list {
+    list-style: none;
+    padding: 0;
+}
+
+.recommendation-list li {
+    padding: 0.75rem;
+    margin-bottom: 0.5rem;
+    background: rgba(46, 139, 87, 0.05);
+    border-radius: var(--border-radius);
     position: relative;
     padding-left: 2rem;
 }
 
-.roadmap-timeline:before {
-    content: '';
+.recommendation-list li::before {
+    content: '•';
     position: absolute;
-    left: 1rem;
-    top: 0;
-    bottom: 0;
-    width: 2px;
-    background-color: var(--border-color);
-}
-
-.timeline-item {
-    position: relative;
-    margin-bottom: 2rem;
-}
-
-.timeline-marker {
-    position: absolute;
-    left: -2.5rem;
-    top: 0.5rem;
-    width: 1rem;
-    height: 1rem;
-    border-radius: 50%;
-    border: 2px solid white;
-    box-shadow: 0 0 0 2px var(--border-color);
-}
-
-.timeline-marker.short-term {
-    background-color: var(--success-color);
-}
-
-.timeline-marker.medium-term {
-    background-color: var(--warning-color);
-}
-
-.timeline-marker.long-term {
-    background-color: var(--info-color);
-}
-
-.timeline-content h4 {
-    color: var(--primary-color);
-    margin-bottom: 0.5rem;
-}
-
-.timeline-content ul {
-    list-style: none;
-}
-
-.timeline-content li {
-    padding: 0.25rem 0;
-}
-
-.timeline-content li:before {
-    content: "→";
+    left: 0.75rem;
     color: var(--primary-color);
     font-weight: bold;
-    display: inline-block;
-    width: 1em;
-    margin-left: -1em;
 }
 
-/* Error Styles */
-.error-card {
+/* Actions Section */
+.actions-section {
+    padding: 2rem;
+    display: flex;
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+
+.action-btn {
+    padding: 0.75rem 1.5rem;
+    border: none;
+    border-radius: var(--border-radius);
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: var(--transition);
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    text-decoration: none;
+}
+
+.action-btn.primary {
+    background: var(--primary-color);
+    color: white;
+}
+
+.action-btn.primary:hover {
+    background: var(--secondary-color);
+    transform: translateY(-2px);
+}
+
+.action-btn.secondary {
+    background: var(--info-color);
+    color: white;
+}
+
+.action-btn.secondary:hover {
+    background: #138496;
+    transform: translateY(-2px);
+}
+
+.action-btn:not(.primary):not(.secondary) {
+    background: #f8f9fa;
+    color: var(--dark-color);
+    border: 2px solid #e9ecef;
+}
+
+.action-btn:not(.primary):not(.secondary):hover {
+    background: #e9ecef;
+    transform: translateY(-2px);
+}
+
+/* Footer */
+.footer {
     text-align: center;
+    padding: 2rem 0;
+    color: #6c757d;
+    margin-top: 2rem;
+}
+
+/* Loading Overlay */
+.loading-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.7);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
+    color: white;
+}
+
+.spinner {
+    width: 50px;
+    height: 50px;
+    border: 5px solid rgba(255, 255, 255, 0.3);
+    border-top: 5px solid white;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    margin-bottom: 1rem;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+/* Notification */
+.notification {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    z-index: 10000;
+    min-width: 300px;
+    max-width: 500px;
+}
+
+.notification-content {
+    background: white;
+    padding: 1rem 1.5rem;
+    border-radius: var(--border-radius);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+}
+
+.notification.success .notification-content {
+    border-left: 4px solid var(--success-color);
+}
+
+.notification.error .notification-content {
     border-left: 4px solid var(--danger-color);
 }
 
-.error-card i {
-    font-size: 3rem;
-    color: var(--danger-color);
-    margin-bottom: 1rem;
+.notification.warning .notification-content {
+    border-left: 4px solid var(--warning-color);
+}
+
+.notification.info .notification-content {
+    border-left: 4px solid var(--info-color);
+}
+
+.close-btn {
+    background: none;
+    border: none;
+    font-size: 1.5rem;
+    cursor: pointer;
+    color: #6c757d;
+    padding: 0;
+    width: 30px;
+    height: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.close-btn:hover {
+    color: var(--dark-color);
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    .container {
+        padding: 0 15px;
+    }
+    
+    .header-content h1 {
+        font-size: 2rem;
+    }
+    
+    .upload-container,
+    .progress-container {
+        padding: 1.5rem;
+    }
+    
+    .progress-steps {
+        flex-direction: column;
+        gap: 1rem;
+    }
+    
+    .progress-steps::before {
+        display: none;
+    }
+    
+    .scores-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .tab-buttons {
+        flex-direction: column;
+    }
+    
+    .actions-section {
+        flex-direction: column;
+    }
+    
+    .action-btn {
+        width: 100%;
+        justify-content: center;
+    }
+}
+
+@media (max-width: 480px) {
+    .header-content h1 {
+        font-size: 1.8rem;
+    }
+    
+    .upload-container,
+    .progress-container,
+    .result-card {
+        padding: 1rem;
+    }
+    
+    .file-upload-area {
+        padding: 2rem 1rem;
+    }
+    
+    .upload-icon {
+        font-size: 2rem;
+    }
+}
+
+/* Animation Classes */
+.fade-in {
+    animation: fadeIn 0.5s ease-in;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.slide-up {
+    animation: slideUp 0.3s ease-out;
+}
+
+@keyframes slideUp {
+    from { transform: translateY(100%); }
+    to { transform: translateY(0); }
+}
+EOF
+```
+
+### 5.3 Create JavaScript Application
+
+```bash
+# Create static/js/app.js
+cat > static/js/app.js << 'EOF'
+// ESG Analysis Platform JavaScript
+
+class ESGApp {
+    constructor() {
+        this.currentAnalysisData = null;
+        this.currentCompanyName = '';
+        this.init();
+    }
+
+    init() {
+        this.bindEvents();
+        this.setupFileUpload();
+    }
+
+    bindEvents() {
+        // Form submission
+        document.getElementById('uploadForm').addEventListener('submit', (e) => {
+            e.preventDefault();
+            this.handleFileUpload();
+        });
+
+        // Tab switching
+        document.querySelectorAll('.tab-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                this.switchTab(e.target.dataset.tab);
+            });
+        });
+
+        // Action buttons
+        document.getElementById('generateReportBtn')?.addEventListener('click', () => {
+            this.generateReport();
+        });
+
+        document.getElementById('downloadDataBtn')?.addEventListener('click', () => {
+            this.downloadData();
+        });
+
+        document.getElementById('newAnalysisBtn')?.addEventListener('click', () => {
+            this.resetApp();
+        });
+
+        // Close notification
+        document.getElementById('closeNotification')?.addEventListener('click', () => {
+            this.hideNotification();
+        });
+
+        // File input change
+        document.getElementById('fileInput').addEventListener('change', (e) => {
+            if (e.target.files.length > 0) {
+                this.handleFileSelect(e.target.files[0]);
+            }
+        });
+
+        // Remove file
+        document.getElementById('removeFile')?.addEventListener('click', () => {
+            this.removeFile();
+        });
+    }
+
+    setupFileUpload() {
+        const fileUploadArea = document.getElementById('fileUploadArea');
+        const fileInput = document.getElementById('fileInput');
+
+        // Click to browse
+        fileUploadArea.addEventListener('click', (e) => {
+            if (e.target.classList.contains('browse-link') || e.target === fileUploadArea) {
+                fileInput.click();
+            }
+        });
+
+        //
